@@ -1,0 +1,6 @@
+.venv
+*.session
+*.csv
+/data
+config.data
+account_config.txt

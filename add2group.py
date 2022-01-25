@@ -2,18 +2,20 @@
 from telethon.sync import TelegramClient
 from telethon.tl.functions.messages import GetDialogsRequest
 from telethon.tl.types import InputPeerEmpty, InputPeerChannel, InputPeerUser
-from telethon.errors.rpcerrorlist import PeerFloodError, UserPrivacyRestrictedError
+from telethon.errors.rpcerrorlist import PeerFloodError, UserPrivacyRestrictedError, UserChannelsTooMuchError
 from telethon.tl.functions.channels import InviteToChannelRequest
 import configparser
-import os, sys
+import os
+import sys
 import csv
 import traceback
 import time
 import random
 
-re="\033[1;31m"
-gr="\033[1;32m"
-cy="\033[1;36m"
+re = "\033[1;31m"
+gr = "\033[1;32m"
+cy = "\033[1;36m"
+
 
 def banner():
     print(f"""
@@ -23,6 +25,7 @@ def banner():
 
             version : 1.0
         """)
+
 
 cpass = configparser.RawConfigParser()
 cpass.read('config.data')
@@ -44,13 +47,13 @@ if not client.is_user_authorized():
     os.system('clear')
     banner()
     client.sign_in(phone, input(gr+'[+] Enter the code: '+re))
- 
+
 os.system('clear')
 banner()
 input_file = sys.argv[1]
 users = []
 with open(input_file, encoding='UTF-8') as f:
-    rows = csv.reader(f,delimiter=",",lineterminator="\n")
+    rows = csv.reader(f, delimiter=",", lineterminator="\n")
     next(rows, None)
     for row in rows:
         user = {}
@@ -59,65 +62,84 @@ with open(input_file, encoding='UTF-8') as f:
         user['access_hash'] = int(row[2])
         user['name'] = row[3]
         users.append(user)
- 
+
 chats = []
 last_date = None
 chunk_size = 200
-groups=[]
- 
+groups = []
+
 result = client(GetDialogsRequest(
-             offset_date=last_date,
-             offset_id=0,
-             offset_peer=InputPeerEmpty(),
-             limit=chunk_size,
-             hash = 0
-         ))
+    offset_date=last_date,
+    offset_id=0,
+    offset_peer=InputPeerEmpty(),
+    limit=chunk_size,
+    hash=0
+))
 chats.extend(result.chats)
- 
+
 for chat in chats:
     try:
-        if chat.megagroup== True:
+        if chat.megagroup == True:
             groups.append(chat)
     except:
         continue
- 
-i=0
+
+i = 0
 for group in groups:
     print(gr+'['+cy+str(i)+gr+']'+cy+' - '+group.title)
-    i+=1
+    i += 1
 
 print(gr+'[+] Choose a group to add members')
 g_index = input(gr+"[+] Enter a Number : "+re)
-target_group=groups[int(g_index)]
- 
-target_group_entity = InputPeerChannel(target_group.id,target_group.access_hash)
- 
+target_group = groups[int(g_index)]
+
+target_group_entity = InputPeerChannel(
+    target_group.id, target_group.access_hash)
+
 print(gr+"[1] add member by user ID\n[2] add member by username ")
-mode = int(input(gr+"Input : "+re)) 
-n = 0
- 
+mode = int(input(gr+"Input : "+re))
+
+user_success = []
 for user in users:
-    n += 1
-    if n % 50 == 0:
-	    time.sleep(1)
-	    try:
-	        print ("Adding {}".format(user['id']))
-	        if mode == 1:
-	            if user['username'] == "":
-	                continue
-	            user_to_add = client.get_input_entity(user['username'])
-	        elif mode == 2:
-	            user_to_add = InputPeerUser(user['id'], user['access_hash'])
-	        else:
-	            sys.exit(re+"[!] Invalid Mode Selected. Please Try Again.")
-	        client(InviteToChannelRequest(target_group_entity,[user_to_add]))
-	        print(gr+"[+] Waiting for 5-10 Seconds...")
-	        time.sleep(random.randrange(5, 10))
-	    except PeerFloodError:
-	        print(re+"[!] Getting Flood Error from telegram. \n[!] Script is stopping now. \n[!] Please try again after some time.")
-	    except UserPrivacyRestrictedError:
-	        print(re+"[!] The user's privacy settings do not allow you to do this. Skipping.")
-	    except:
-	        traceback.print_exc()
-	        print(re+"[!] Unexpected Error")
-	        continue
+    try:
+        print(gr+"Adding {}".format(user['id']))
+        if mode == 1:
+            if user['username'] == "":
+                continue
+            user_to_add = client.get_input_entity(user['username'])
+        elif mode == 2:
+            user_to_add = InputPeerUser(user['id'], user['access_hash'])
+        else:
+            sys.exit(re+"[!] Invalid Mode Selected. Please Try Again.")
+        client(InviteToChannelRequest(target_group_entity, [user_to_add]))
+        print(gr+"[+] Waiting for 15-30 Seconds...")
+        user_success.append(user)
+        time.sleep(random.randrange(15, 30))
+    except PeerFloodError:
+        print(
+            re+"[!] Getting Flood Error from telegram. \n[!] Script is stopping now. \n[!] Please try again after some time.")
+        print(re+"[!] Error --- Waiting for 15-30 Seconds...")
+        time.sleep(random.randrange(15, 30))
+    except UserPrivacyRestrictedError:
+        print(
+            re+"[!] The user's privacy settings do not allow you to do this. Skipping.")
+        print(re+"[!] Error --- Waiting for 15-30 Seconds...")
+        time.sleep(random.randrange(15, 30))
+    except UserChannelsTooMuchError:
+        print(
+            re+"[!] The user's in too many channel. Skipping.")
+        print(re+"[!] Error --- Waiting for 15-30 Seconds...")
+        time.sleep(random.randrange(15, 30))
+    except:
+        traceback.print_exc()
+        print(re+"[!] Unexpected Error")
+        print(re+"[!] Error --- Waiting for 15-30 Seconds...")
+        time.sleep(random.randrange(15, 30))
+        continue
+
+with open("users_live.csv", "a", encoding='UTF-8') as f:
+    writer = csv.writer(f, delimiter=",", lineterminator="\n")
+    for user in user_success:
+        writer.writerow([user['username'], user['id'],
+                        user['access_hash'], user['name']])
+print(gr+'[+] Update users live successfully.')
